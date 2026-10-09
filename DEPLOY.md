@@ -76,6 +76,14 @@ DB rollback: daily dump cron `15 4 * * * /root/containers/gentle-dot/bin/db-dump
 → `/home/ragarapa/web/granlenceria.es/backups-db/presta_b-*.sql.gz` (7 kept,
 outside the docroot, 0600). Bulk SQL still requires a targeted pre-dump per AGENTS.md.
 
+## Two-locks hardening (active since 2026-10-09)
+
+Basic Auth at nginx, in front of the access token:
+- Include: `/home/ragarapa/conf/web/dot.granlenceria.es/nginx.ssl.conf_auth`
+  (HestiaCP `nginx.ssl.conf_*` custom include — survives domain rebuilds)
+- Credentials: `/home/ragarapa/conf/web/dot.granlenceria.es/.htpasswd-dot`
+  (apr1 hash; rotate with `openssl passwd -apr1 'new'`, format `user:hash`, no reload needed)
+
 ## Safety reminders
 
 - This agent can break the live store (files + DB). Before risky work, snapshot:
