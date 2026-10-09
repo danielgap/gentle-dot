@@ -1,12 +1,17 @@
 # Gentle Dot deployed behind the existing caddy-docker-proxy (hestia-docker container).
 # Pattern mirrors dashboard_granlenceria-frontend: join external `web` network,
 # let caddy-docker-proxy route by label. No host ports are bound.
-# Usage: docker compose -f compose.deploy.yml up -d --build
+# Build order matters (Dockerfile.deploy layers on the base image):
+#   docker build -t gentle-dot-base:local .
+#   docker compose -f compose.deploy.yml up -d --build
 name: gentle-dot
 
 services:
   gentle-dot:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.deploy
+    image: gentle-dot:deploy
     restart: unless-stopped
     networks:
       - web
@@ -14,10 +19,16 @@ services:
       - '4317'
     environment:
       GENTLE_DOT_ALLOWED_ORIGINS: '["https://dot.granlenceria.es"]'
-      GENTLE_DOT_WORKSPACE: /home/dot/landings
+      # The user's preferred working folder: the live PrestaShop docroot (max-power mode,
+      # explicit user decision 2026-10-09). Agent uid 1001 == host user ragarapa.
+      GENTLE_DOT_WORKSPACE: /home/dot/site
     volumes:
       - dot-home:/home/dot
-      - ./landings:/home/dot/landings
+      # Full read/write access to the shop docroot (user-approved risk).
+      - /home/ragarapa/web/granlenceria.es/public_html:/home/dot/site
+      # MariaDB unix socket: DB access without any network exposure or config change.
+      # Mount the directory so a MariaDB restart (new socket inode) stays visible.
+      - /run/mysqld:/run/mysqld
     labels:
       caddy: dot.granlenceria.es
       caddy.reverse_proxy: "{{upstreams 4317}}"

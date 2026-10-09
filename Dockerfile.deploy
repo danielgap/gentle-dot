@@ -1,0 +1,12 @@
+# Local extension of the upstream gentle-dot image: adds mariadb-client so the
+# agent can query PrestaShop's MariaDB through the mounted unix socket.
+# Build the base image first (see DEPLOY.md):
+#   docker build -t gentle-dot-base:local .
+ARG BASE_IMAGE=gentle-dot-base:local
+FROM ${BASE_IMAGE}
+USER root
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends mariadb-client \
+	&& rm -rf /var/lib/apt/lists/*
+USER dot
+WORKDIR /home/dot
