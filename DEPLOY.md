@@ -62,6 +62,20 @@ git pull --ff-only && docker build -t gentle-dot-base:local . \
 - Agent itself edited a file in `public_html/calculadora/` and queried
   `ps_product` (858 rows) through the socket — proof in the engine session log.
 
+## Git rollback safety (default behavior)
+
+The docroot is a server-local git repo (no remotes; never push). The agent commits
+its work units as `gentle-dot` following the mandatory discipline in the shop's
+`AGENTS.md` (scoped adds, conventional commits, no `git add -A`, no `reset --hard`).
+Host baseline snapshot: `e88dc2ce` (2026-10-09). Access: ACL `u:ragarapa:rwx`
+(recursive + default) on `.git/`; repo-local user.name/email were removed so host
+(root global: danielgap) and engine (isolated HOME global: gentle-dot) identities
+do not collide. `safe.directory /home/dot/site` is set in the engine's HOME.
+
+DB rollback: daily dump cron `15 4 * * * /root/containers/gentle-dot/bin/db-dump.sh`
+→ `/home/ragarapa/web/granlenceria.es/backups-db/presta_b-*.sql.gz` (7 kept,
+outside the docroot, 0600). Bulk SQL still requires a targeted pre-dump per AGENTS.md.
+
 ## Safety reminders
 
 - This agent can break the live store (files + DB). Before risky work, snapshot:
