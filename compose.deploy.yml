@@ -1,0 +1,30 @@
+# Gentle Dot deployed behind the existing caddy-docker-proxy (hestia-docker container).
+# Pattern mirrors dashboard_granlenceria-frontend: join external `web` network,
+# let caddy-docker-proxy route by label. No host ports are bound.
+# Usage: docker compose -f compose.deploy.yml up -d --build
+name: gentle-dot
+
+services:
+  gentle-dot:
+    build: .
+    restart: unless-stopped
+    networks:
+      - web
+    expose:
+      - '4317'
+    environment:
+      GENTLE_DOT_ALLOWED_ORIGINS: '["https://dot.granlenceria.es"]'
+      GENTLE_DOT_WORKSPACE: /home/dot/landings
+    volumes:
+      - dot-home:/home/dot
+      - ./landings:/home/dot/landings
+    labels:
+      caddy: dot.granlenceria.es
+      caddy.reverse_proxy: "{{upstreams 4317}}"
+
+networks:
+  web:
+    external: true
+
+volumes:
+  dot-home:
