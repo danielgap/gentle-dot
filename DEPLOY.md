@@ -19,7 +19,12 @@ browser → nginx (HestiaCP :443) → https://127.0.0.1:4443 → caddy-docker-pr
 - Landings workspace: host `./landings` → container `/home/dot/landings`
   (`GENTLE_DOT_WORKSPACE`). Container user `dot` is **uid 1001** (uid 1000 is
   `node` in the base image), so the host dir must stay owned by 1001:1001.
-- Model accounts: none baked in. Sign in from the browser: Accounts or `/login`.
+- Model accounts: **glm-5.3 via `zai` (Z.ai) API key, injected server-side** from the
+  host's pi auth (`/root/.pi/agent/auth.json` → container
+  `/home/dot/.gentle-dot/agent/auth.json`, same pi format). Default model set in
+  the engine's `settings.json`: `defaultModel: glm-5.3`, `defaultProvider: zai`,
+  `defaultThinkingLevel: high`. The daemon preserves those keys across restarts.
+  Verified E2E via WS smoke test: ready.model=GLM-5.3, chat turn answered.
 
 ## Ops
 
