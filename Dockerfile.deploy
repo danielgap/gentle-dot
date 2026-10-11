@@ -8,5 +8,6 @@ USER root
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends mariadb-client \
 	&& rm -rf /var/lib/apt/lists/*
-USER dot
+# S25.8 server mode: the daemon runs as root and supervises the engine as `dot` (uid 1001);
+# no USER switch here — the upstream entrypoint owns privilege dropping.
 WORKDIR /home/dot
