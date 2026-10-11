@@ -84,6 +84,21 @@ Basic Auth at nginx, in front of the access token:
 - Credentials: `/home/ragarapa/conf/web/dot.granlenceria.es/.htpasswd-dot`
   (apr1 hash; rotate with `openssl passwd -apr1 'new'`, format `user:hash`, no reload needed)
 
+## S25.8 server mode (since upstream 535e7f7)
+
+Upstream `#45` changed the container architecture: the **daemon runs as root**, the engine still
+runs as `dot` (uid 1001 — site mount ownership unchanged), and a `dotmcp` system user runs
+connector servers. Consequences for this deployment:
+
+- `Dockerfile.deploy` no longer switches USER: the upstream entrypoint owns privilege dropping.
+- The daemon token (`<data>/token`) is now **root-owned 0600** by design (the engine must not
+  read it), so the dot-telegram bridge container runs as `user: "0:0"` to read it from the
+  read-only shared volume.
+- **Web PIN**: connector changes and sending actions ask for a PIN set on first use in the
+  browser (`<data>/web-pin.json`; delete that file to reset it). Chat still uses the access key.
+- Connector secrets are off unless `GENTLE_DOT_SECRETS_KEY` is set; we use no connectors, so it
+  stays unset.
+
 ## Safety reminders
 
 - This agent can break the live store (files + DB). Before risky work, snapshot:
