@@ -1,0 +1,61 @@
+# Temporary evidence workflow for PR #112's functional review (head 9c4f6a8).
+# Lives on the fork branch evidence/p112 only; never merged. Setup mirrors windows.yml.
+name: PR 112 evidence
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [evidence/p112]
+
+concurrency:
+  group: evidence-p112
+  cancel-in-progress: true
+
+jobs:
+  evidence:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      # gentle-pi's Windows postinstall builds from source and needs Go >= 1.25.10.
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache: false
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2.9.2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - name: Build self-contained installers
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm package:windows
+
+      - name: Collect functional evidence
+        shell: pwsh
+        run: pwsh -File scripts/evidence/p112-collect.ps1 -RepoRoot . -OutDir "$env:RUNNER_TEMP\p112-evidence"
+
+      - name: Upload evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p112-evidence
+          path: ${{ runner.temp }}\p112-evidence
+          if-no-files-found: error
+
+      - name: Upload NSIS installer (for the human GUI recording against this exact head)
+        uses: actions/upload-artifact@v4
+        with:
+          name: p112-nsis-installer
+          path: apps/desktop/src-tauri/target/release/bundle/nsis/*x64-setup.exe
+          if-no-files-found: error
