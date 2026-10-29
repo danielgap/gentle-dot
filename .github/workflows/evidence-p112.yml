@@ -45,7 +45,11 @@ jobs:
         run: |
           $dir = Join-Path $env:RUNNER_TEMP 'pnpm-exe'
           New-Item -ItemType Directory -Force -Path $dir | Out-Null
-          Invoke-WebRequest 'https://github.com/pnpm/pnpm/releases/download/v11.5.0/pnpm-win-x64.exe' -OutFile (Join-Path $dir 'pnpm.exe')
+          $zip = Join-Path $env:RUNNER_TEMP 'pnpm-win32-x64.zip'
+          Invoke-WebRequest 'https://github.com/pnpm/pnpm/releases/download/v11.5.0/pnpm-win32-x64.zip' -OutFile $zip
+          Expand-Archive -LiteralPath $zip -DestinationPath $dir -Force
+          Get-ChildItem $dir | ForEach-Object { Write-Host "unpacked: $($_.Name)" }
+          if (-not (Test-Path (Join-Path $dir 'pnpm.exe'))) { throw 'pnpm.exe not found in the release zip' }
           (Get-FileHash (Join-Path $dir 'pnpm.exe') -Algorithm SHA256).Hash | Write-Host
           Add-Content $env:GITHUB_PATH $dir
 
