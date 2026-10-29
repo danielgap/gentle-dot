@@ -37,6 +37,18 @@ jobs:
         with:
           workspaces: apps/desktop/src-tauri
 
+      # stage-runtime.mjs spawns `pnpm` via Node spawnSync without a shell, and on this
+      # image pnpm exists only as a .cmd shim, which spawnSync cannot execute (ENOENT).
+      # Put the real standalone pnpm.exe on PATH; repo bytes stay untouched.
+      - name: pnpm.exe on PATH for Node spawnSync
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'pnpm-exe'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          Invoke-WebRequest 'https://github.com/pnpm/pnpm/releases/download/v11.5.0/pnpm-win-x64.exe' -OutFile (Join-Path $dir 'pnpm.exe')
+          (Get-FileHash (Join-Path $dir 'pnpm.exe') -Algorithm SHA256).Hash | Write-Host
+          Add-Content $env:GITHUB_PATH $dir
+
       - name: Build self-contained installers
         run: |
           pnpm install --frozen-lockfile
