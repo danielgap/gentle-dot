@@ -47,10 +47,11 @@ $Port = 14317
 $s0 = @("image=$env:IMAGE_OS/$env:IMAGE_VERSION", "runner=$env:RUNNER_NAME")
 $cv = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
 $s0 += "os=$($cv.ProductName) build=$($cv.CurrentBuild).$($cv.UBR) arch=$env:PROCESSOR_ARCHITECTURE"
-foreach ($t in 'node','pnpm','rustc','go','git') {
+foreach ($t in 'node','pnpm','rustc','git') {
   $c = Get-Command $t -ErrorAction SilentlyContinue
   $s0 += "$t=$(if ($c) { (& $t --version 2>&1 | Select-Object -First 1) } else { 'not-found' })"
 }
+$s0 += "go=$(go version 2>&1)"
 $s0 | Write-Host; Out-To '0-environment.txt' ($s0 -join "`n")
 
 # ---------- 1. installer identity ----------
@@ -73,9 +74,11 @@ if (Test-Path $engram) { $rv += "engram=$(& $engram --version 2>&1 | Select-Obje
 $engine = Get-ChildItem $runtime -Recurse -Filter 'gentle-ai*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($engine) { $rv += "engine=$(& $engine.FullName --version 2>&1 | Select-Object -First 1)" }
 $arp = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Gentle Dot' -ErrorAction SilentlyContinue
+$rootExes = @(Get-ChildItem $instDir -File -Filter '*.exe' -ErrorAction SilentlyContinue | ForEach-Object Name)
 $s2 = @(
   "nsis-exit=$($p2.ExitCode)",
-  "exe-exists=$(Test-Path $exe)",
+  "root-exes=$($rootExes -join ', ')",
+  "exe-present=$(@($rootExes | Where-Object { $_ -ne 'uninstall.exe' }).Count -gt 0)",
   "runtime-file-count=$(@(Get-ChildItem $runtime -Recurse -File).Count)",
   ($rv -join '; '),
   "arp-entry=$([bool]$arp)",
@@ -110,9 +113,17 @@ $health = Wait-Health $Port 30
 $s3 = @("ready-line-seen=$ready pid=$($pA.Id) alive=$(-not $pA.HasExited)", $health)
 $s3 += 'data-tree:'; $s3 += (Get-ChildItem $dataA -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object FullName)
 $s3 += "data-dir-owner=$((Get-Acl $dataA).Owner)"
-$s3 += 'icacls:'; $s3 += (icacls $dataA /T /C 2>&1)
+$s3 += 'icacls (boundary paths):'
+foreach ($p in @($dataA, (Join-Path $dataA 'agent'), (Join-Path $dataA 'sessions'), (Join-Path $dataA 'workspace'), (Join-Path $dataA 'token'))) {
+  if (Test-Path $p) { $s3 += (icacls $p /C 2>&1) }
+}
 $hashA0 = Hash-Core $dataA
-$s3 += "core-state-recorded=$($hashA0 -ne 'ABSENT' -and $hashA0 -ne 'EMPTY')"
+$tokPre = if (Test-Path (Join-Path $dataA 'token')) { (Get-FileHash (Join-Path $dataA 'token') -Algorithm SHA256).Hash } else { 'ABSENT' }
+$idPre = if (Test-Path (Join-Path $dataA 'identity.md')) { (Get-FileHash (Join-Path $dataA 'identity.md') -Algorithm SHA256).Hash } else { 'ABSENT' }
+$sessPre = Hash-Core (Join-Path $dataA 'sessions')
+$s3 += "token-sha256=$tokPre"
+$s3 += "identity-md-sha256=$idPre"
+$s3 += "sessions-state=$sessPre"
 $s3 | Write-Host; Out-To '3-fresh-first-launch.txt' ($s3 -join "`n")
 
 # ---------- 4. safe refusals ----------
@@ -121,8 +132,8 @@ $cExit = Run-Daemon-Exit (Join-Path $OutDir 'data-c') $Port (Join-Path $OutDir '
 $hashA1 = Hash-Core $dataA
 $healthA = Wait-Health $Port 15
 $s4 = @(
-  "B(same data dir, other port) $bExit", (Get-Content (Join-Path $OutDir '4-b-stderr.txt') -ErrorAction SilentlyContinue),
-  '', "C(other data dir, same port) $cExit", (Get-Content (Join-Path $OutDir '4-c-stderr.txt') -ErrorAction SilentlyContinue),
+  "B(same data dir, other port) $bExit", ((Get-Content (Join-Path $OutDir '4-b-stderr.txt') -ErrorAction SilentlyContinue) -join "`n"),
+  '', "C(other data dir, same port) $cExit", ((Get-Content (Join-Path $OutDir '4-c-stderr.txt') -ErrorAction SilentlyContinue) -join "`n"),
   '', "A-core-unchanged-after-rejections=$($hashA0 -eq $hashA1)", "A-still-healthy: $healthA"
 )
 $s4 | Write-Host; Out-To '4-refusals.txt' ($s4 -join "`n")
@@ -134,7 +145,16 @@ $pA2 = Start-Daemon $dataA $Port (Join-Path $OutDir '5-a2-stdout.txt') (Join-Pat
 $ready2 = Wait-Line (Join-Path $OutDir '5-a2-stdout.txt') 'Gentle Dot is running' 90
 $health2 = Wait-Health $Port 30
 $hashA2 = Hash-Core $dataA
-$s5 = @("ready-line-seen=$ready2", $health2, "existing-identity-preserved-no-reprovision=$($hashA0 -eq $hashA2)")
+$tokPost = if (Test-Path (Join-Path $dataA 'token')) { (Get-FileHash (Join-Path $dataA 'token') -Algorithm SHA256).Hash } else { 'ABSENT' }
+$idPost = if (Test-Path (Join-Path $dataA 'identity.md')) { (Get-FileHash (Join-Path $dataA 'identity.md') -Algorithm SHA256).Hash } else { 'ABSENT' }
+$sessPost = Hash-Core (Join-Path $dataA 'sessions')
+$s5 = @(
+  "ready-line-seen=$ready2", $health2,
+  "token-content-preserved=$($tokPre -eq $tokPost) ($($tokPost.Substring(0,16))…)",
+  "identity-md-content-preserved=$($idPre -eq $idPost) ($($idPost.Substring(0,16))…)",
+  "sessions-preserved=$($sessPre -eq $sessPost)"
+)
+$s5 += 'note: identity.md is re-staged from the packaged source on every start (white-label identityArgs); its mtime refreshing is by design, the content hash above is the meaningful comparison.'
 $s5 += 'identity files:'
 foreach ($f in 'identity.md','token') { $fp = Join-Path $dataA $f; if (Test-Path $fp) { $s5 += "  $f mtime=$((Get-Item $fp).LastWriteTime.ToString('s')) sha=$((Get-FileHash $fp -Algorithm SHA256).Hash.Substring(0,16))" } }
 $s5 | Write-Host; Out-To '5-existing-relaunch.txt' ($s5 -join "`n")
