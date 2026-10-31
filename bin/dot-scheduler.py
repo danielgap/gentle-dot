@@ -63,10 +63,26 @@ def log(msg: str) -> None:
 
 
 def parse_local(value: str, what: str) -> datetime:
+    # Accepts "YYYY-MM-DDTHH:MM[:SS]" (local time) and full ISO 8601 with a
+    # UTC "Z" or numeric offset (converted to local), so agent-written jobs
+    # with ISO stamps are not silently skipped as malformed.
+    v = str(value).strip()
+    for fmt in ("%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return datetime.strptime(v, fmt)
+        except ValueError:
+            pass
     try:
-        return datetime.strptime(value, "%Y-%m-%dT%H:%M")
+        iso = v[:-1] + "+00:00" if v.endswith(("Z", "z")) else v
+        parsed = datetime.fromisoformat(iso)
     except ValueError:
-        raise JobError(f"invalid {what} {value!r}: expected YYYY-MM-DDTHH:MM local time")
+        raise JobError(
+            f"invalid {what} {value!r}: expected YYYY-MM-DDTHH:MM[:SS] local time "
+            "or ISO 8601 with UTC/offset"
+        )
+    if parsed.tzinfo is None:
+        return parsed
+    return parsed.astimezone()
 
 
 def parse_hhmm(value: str, what: str) -> tuple[int, int]:
