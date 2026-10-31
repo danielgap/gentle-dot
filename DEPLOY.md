@@ -99,6 +99,24 @@ connector servers. Consequences for this deployment:
 - Connector secrets are off unless `GENTLE_DOT_SECRETS_KEY` is set; we use no connectors, so it
   stays unset.
 
+## Search Console access (since 2026-10-31)
+
+The agent reads Google Search Console through the granlenceria dashboard backend
+(`dashboard_granlenceria-backend-1`, same host, shared `web` network via the frontend
+container `dashboard_granlenceria-frontend-1/api`). The dashboard owns the Google
+service account (`webmasters.readonly`); gentle-dot holds no Google credentials.
+
+- CLI: `/home/dot/bin/gsc` (source: `bin/gsc.js` in this repo; node, no deps).
+  Live passthrough — every query hits Google at call time. Discovers via the shop's AGENTS.md.
+- Credentials: `/home/dot/.dashboard.env` (0600, uid 1001) with `DASHBOARD_API_URL`,
+  `DASHBOARD_USERNAME`, `DASHBOARD_PASSWORD` (dashboard admin). Reprovision the same way
+  it was created: stream from the backend container's env, never through stdout/logs.
+- JWT cache: `/home/dot/.cache/gsc-token.json` (0600, uid 1001, dir 0700). The API's
+  auth limiter is 5 logins/15 min/IP, so the token is reused until ~5 min before its
+  24h expiry (or on a 401). If the cache breaks, max ~5 gsc calls per 15 min.
+- Rotate the dashboard password: update the dashboard's env, then rewrite
+  `/home/dot/.dashboard.env` in the container (keep 0600, uid 1001) and delete the token cache.
+
 ## Safety reminders
 
 - This agent can break the live store (files + DB). Before risky work, snapshot:
