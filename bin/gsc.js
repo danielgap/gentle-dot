@@ -6,12 +6,13 @@
  * Google service-account credentials). Live passthrough: every query hits
  * Google Search Console at call time; nothing is cached except the JWT.
  *
- * Config: ~/.dashboard.env (0600, owned by dot)
+ * Config: /home/dot/.dashboard.env (0600, owned by dot; override: GSC_ENV_FILE)
  *   DASHBOARD_API_URL     e.g. http://dashboard_granlenceria-frontend-1/api
  *   DASHBOARD_USERNAME
  *   DASHBOARD_PASSWORD
  *
- * Token cache: ~/.cache/gsc-token.json (refreshed near expiry or on 401).
+ * Token cache: /home/dot/.cache/gsc-token.json (override: GSC_TOKEN_FILE;
+ * refreshed near expiry or on 401).
  * The API allows only 5 logins / 15 min per IP, so tokens are reused.
  *
  * Usage:
@@ -25,12 +26,13 @@
 'use strict';
 
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 
-const HOME = os.homedir();
-const ENV_FILE = path.join(HOME, '.dashboard.env');
-const TOKEN_FILE = path.join(HOME, '.cache', 'gsc-token.json');
+// Absolute defaults: the engine runs with an isolated HOME (/home/dot/.gentle-dot/home,
+// S25.8), so `~` does NOT resolve to /home/dot there. The canonical locations sit in
+// the real dot home next to ~/.my.cnf. Override with GSC_ENV_FILE / GSC_TOKEN_FILE.
+const ENV_FILE = process.env.GSC_ENV_FILE || '/home/dot/.dashboard.env';
+const TOKEN_FILE = process.env.GSC_TOKEN_FILE || '/home/dot/.cache/gsc-token.json';
 const TOKEN_REFRESH_MARGIN_MS = 5 * 60 * 1000; // refresh 5 min before expiry
 const ALLOWED_DIMS = ['date', 'query', 'page', 'country', 'device'];
 
