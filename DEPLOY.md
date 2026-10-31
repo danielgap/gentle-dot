@@ -117,6 +117,33 @@ service account (`webmasters.readonly`); gentle-dot holds no Google credentials.
 - Rotate the dashboard password: update the dashboard's env, then rewrite
   `/home/dot/.dashboard.env` in the container (keep 0600, uid 1001) and delete the token cache.
 
+## Scheduled tasks & Telegram (since 2026-10-31)
+
+The agent schedules its own tasks and sends Telegram messages, no host access needed.
+
+- **Job dir (drop-dir)**: `/home/dot/scheduler/*.job` in the volume (host:
+  `/var/lib/docker/volumes/gentle-dot_dot-home/_data/scheduler`). The agent writes JSON
+  jobs (schema in the shop's AGENTS.md); max 50, `every` ≥ 5 min, prompts ≤ 8000 chars.
+- **Host cron** (installed once): `* * * * * /root/containers/gentle-dot/bin/dot-scheduler.py`.
+  Python 3.8 compatible, self-locks (`/run/dot-scheduler.lock`), rewrites jobs as uid 1001
+  so the agent keeps ownership, retries failed fires up to 3 times, log at
+  `/var/log/dot-scheduler.log` (self-truncates over 1 MB).
+- **Turn injection**: `bin/dot-say.sh "<prompt>" [timeout_min]` (host) → `dot-say.js`
+  (in the volume at `/home/dot/bin/`) connects as a WS client with the root-owned daemon
+  token and injects the prompt as a turn of the one continuous conversation. The engine
+  user cannot read the token, so the agent cannot self-inject (by design). Exit 75 =
+  daemon refused (retry), 76 = bad token, 1 = timeout/protocol, 0 = reply on stdout.
+- **Telegram send**: `/home/dot/bin/tg send dani|raquel "<text>"` / `send-file` — sends as
+  the dot bot. Config: `/home/dot/.telegram.env` (0600, uid 1001) with the bot token
+  (streamed from the bridge container env, never through stdout) and the chat map
+  `TELEGRAM_CHAT_DANI=244620835` (Danielgap), `TELEGRAM_CHAT_RAQUEL=7090438284`.
+  Rotate the bot token: change it in the bridge env, then rewrite `.telegram.env`
+  in the container (keep 0600, uid 1001).
+
+Verified end-to-end 2026-10-31: injected turn replied `PONG-dot-say-OK`; scheduler fired a
+job whose turn made the agent run `tg send dani` (delivered); re-run skipped non-due jobs;
+malformed job skipped with a log line.
+
 ## Safety reminders
 
 - This agent can break the live store (files + DB). Before risky work, snapshot:
