@@ -26,6 +26,7 @@ services:
       - dot-home:/home/dot
       # Full read/write access to the shop docroot (user-approved risk).
       - /home/ragarapa/web/granlenceria.es/public_html:/home/dot/site
+      - /home/ragarapa/web/granlenceria.es/private/sendfox.env:/home/dot/.sendfox.env:ro
       # MariaDB unix socket: DB access without any network exposure or config change.
       # Mount the directory so a MariaDB restart (new socket inode) stays visible.
       - /run/mysqld:/run/mysqld
